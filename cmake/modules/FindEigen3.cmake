@@ -18,7 +18,7 @@
 
 # Modified by Garth N. Wells <gnw20@cam.ac.uk> to add EIGEN_DIR to
 # search path
-
+set(EIGEN3_INCLUDE_DIR /home/user/mbittl/scratch/repos/eigen3)
 if(NOT Eigen3_FIND_VERSION)
   if(NOT Eigen3_FIND_VERSION_MAJOR)
     set(Eigen3_FIND_VERSION_MAJOR 2)

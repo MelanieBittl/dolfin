@@ -320,10 +320,10 @@ UmfpackLUSolver::umfpack_factorize_symbolic(std::size_t M, std::size_t N,
     umfpack_check_status(status, "symbolic");
     return std::shared_ptr<void>(symbolic, UmfpackIntSymbolicDeleter());
   }
-  else if (sizeof(std::size_t) == sizeof(SuiteSparse_long))
+  else if (sizeof(std::size_t) == sizeof(UF_long ))
   {
-    const SuiteSparse_long* _Ap = reinterpret_cast<const SuiteSparse_long*>(Ap);
-    const SuiteSparse_long* _Ai = reinterpret_cast<const SuiteSparse_long*>(Ai);
+    const UF_long * _Ap = reinterpret_cast<const UF_long *>(Ap);
+    const UF_long * _Ai = reinterpret_cast<const UF_long *>(Ai);
     long int status = umfpack_dl_symbolic(M, N, _Ap, _Ai, Ax, &symbolic,
                                           dnull.get(), dnull.get());
     umfpack_check_status(status, "symbolic");
@@ -364,10 +364,10 @@ UmfpackLUSolver::umfpack_factorize_numeric(const std::size_t* Ap,
     umfpack_check_status(status, "numeric");
     return std::shared_ptr<void>(numeric, UmfpackIntNumericDeleter());
   }
-  else if (sizeof(std::size_t) == sizeof(SuiteSparse_long))
+  else if (sizeof(std::size_t) == sizeof(UF_long ))
   {
-    const SuiteSparse_long* _Ap = reinterpret_cast<const SuiteSparse_long*>(Ap);
-    const SuiteSparse_long* _Ai = reinterpret_cast<const SuiteSparse_long*>(Ai);
+    const UF_long * _Ap = reinterpret_cast<const UF_long *>(Ap);
+    const UF_long * _Ai = reinterpret_cast<const UF_long *>(Ai);
     status = umfpack_dl_numeric(_Ap, _Ai, Ax, symbolic, &numeric, dnull.get(),
                                 dnull.get());
     umfpack_check_status(status, "numeric");
@@ -407,10 +407,10 @@ void UmfpackLUSolver::umfpack_solve(const std::size_t* Ap,
     status = umfpack_di_solve(UMFPACK_At, _Ap, _Ai, Ax, x, b, numeric,
                               dnull.get(), dnull.get());
   }
-  else if (sizeof(std::size_t) == sizeof(SuiteSparse_long))
+  else if (sizeof(std::size_t) == sizeof(UF_long ))
   {
-    const SuiteSparse_long* _Ap = reinterpret_cast<const SuiteSparse_long*>(Ap);
-    const SuiteSparse_long* _Ai = reinterpret_cast<const SuiteSparse_long*>(Ai);
+    const UF_long * _Ap = reinterpret_cast<const UF_long *>(Ap);
+    const UF_long * _Ai = reinterpret_cast<const UF_long *>(Ai);
     status = umfpack_dl_solve(UMFPACK_At, _Ap, _Ai, Ax, x, b, numeric,
                               dnull.get(), dnull.get());
   }
