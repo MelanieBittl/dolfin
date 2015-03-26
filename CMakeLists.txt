@@ -314,7 +314,8 @@ endif()
 # Run tests to find required packages
 
 # Check for Boost
-set(BOOST_ROOT $ENV{BOOST_DIR} $ENV{BOOST_HOME})
+set(BOOST_ROOT /sfw/boost/1.53)  #damit richtige Boost-Version genommen wird
+#set(BOOST_ROOT $ENV{BOOST_DIR} $ENV{BOOST_HOME})
 if (BOOST_ROOT)
   set(Boost_NO_SYSTEM_PATHS on)
 endif()
@@ -323,13 +324,13 @@ endif()
 set(Boost_NO_BOOST_CMAKE true)
 
 set(Boost_USE_MULTITHREADED $ENV{BOOST_USE_MULTITHREADED})
-set(Boost_ADDITIONAL_VERSIONS 1.48 1.48.0 1.49 1.49.0 1.50 1.50.0)
+set(Boost_ADDITIONAL_VERSIONS 1.53 1.53.0)
 
-find_package(Boost 1.48 QUIET REQUIRED)
+find_package(Boost 1.53 QUIET REQUIRED) #1.53 gesetzt damit verlinkung passt
 
 set(DOLFIN_BOOST_COMPONENTS filesystem program_options system thread iostreams
     timer)
-find_package(Boost COMPONENTS ${DOLFIN_BOOST_COMPONENTS} REQUIRED)
+find_package(Boost 1.53 COMPONENTS ${DOLFIN_BOOST_COMPONENTS} REQUIRED)
 
 # Check for required package UFC
 set(UFC_DIR /home/user/mbittl/scratch/local/share/ufc)

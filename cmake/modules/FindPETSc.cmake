@@ -49,6 +49,9 @@
 # http://www.cmake.org/Wiki/CMake:Improving_Find*_Modules#Current_workarounds
 
 message(STATUS "Checking for package 'PETSc'")
+set(PETSC_DIR /home/user/mbittl/scratch/local/petsc) 
+#set(PETSC_INCLUDE_DIRS /home/user/mbittl/scratch/local/include)
+
 
 # Set debian_arches (PETSC_ARCH for Debian-style installations)
 foreach (debian_arches linux kfreebsd)
