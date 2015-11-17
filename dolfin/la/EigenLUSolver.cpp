@@ -24,12 +24,12 @@
 // Works with Cholmod downloaded by PETSc
 // Eigen uses deprecated UF_long
 // now redefined as SuiteSparse_long
-#ifndef UF_long
+/*#ifndef UF_long
 #define UF_long     SuiteSparse_long
 #define UF_long_max SuiteSparse_long_max
 #define UF_long_idd SuiteSparse_long_idd
 #define UF_long_id  SuiteSparse_long_id
-#endif
+#endif*/
 #include <Eigen/CholmodSupport>
 #endif
 #ifdef HAS_UMFPACK

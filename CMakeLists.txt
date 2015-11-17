@@ -76,7 +76,7 @@ option(CMAKE_USE_RELATIVE_PATHS "Use relative paths in makefiles and projects." 
 option(DOLFIN_AUTO_DETECT_MPI "Detect MPI automatically - turn this off to use the MPI compiler wrappers directly via setting CXX, CXX, FC." ON)
 option(DOLFIN_ENABLE_CODE_COVERAGE "Enable code coverage." OFF)
 option(DOLFIN_WITH_LIBRARY_VERSION "Build with library version information." ON)
-option(DOLFIN_ENABLE_UNIT_TESTS "Enable unit tests." ON)
+option(DOLFIN_ENABLE_UNIT_TESTS "Enable unit tests." OFF)
 option(DOLFIN_ENABLE_TESTING "Enable testing." OFF)
 option(DOLFIN_ENABLE_BENCHMARKS "Enable benchmark programs." OFF)
 option(DOLFIN_ENABLE_DOCS "Enable generation of documentation." ON)
@@ -325,12 +325,8 @@ set(DOLFIN_BOOST_COMPONENTS filesystem program_options system thread iostreams
 find_package(Boost 1.53 COMPONENTS ${DOLFIN_BOOST_COMPONENTS} REQUIRED)
 
 # Check for required package UFC
-<<<<<<< HEAD
-set(UFC_DIR /home/user/mbittl/scratch/local/share/ufc)
-find_package(UFC 1.6.0 QUIET HINTS ${UFC_DIR})
-=======
 find_package(UFC 1.7.0 QUIET HINTS ${UFC_DIR})
->>>>>>> 4e37e07f09abdbb7345207c94039fcd2688e707e
+
 if (NOT UFC_FOUND)
   message(FATAL_ERROR "Could not find a configuration file for package UFC that is "
     "compatible with requested version 1.7.0.\n"
