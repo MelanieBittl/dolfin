@@ -17,10 +17,10 @@
 
 #ifdef HAS_HDF5
 
+#include <string>
 #include <vector>
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
-#include <boost/lexical_cast.hpp>
 
 #include <dolfin/log/log.h>
 #include "XDMFxml.h"
@@ -64,13 +64,15 @@ void XDMFxml::read()
   }
 }
 //-----------------------------------------------------------------------------
-std::string XDMFxml::meshname() const
+std::vector<std::string> XDMFxml::topology_name() const
 {
   // Topology - check format and get dataset name
   pugi::xml_node xdmf_topology
     = xml_doc.child("Xdmf").child("Domain")
-             .child("Grid").child("Topology").child("DataItem");
-  if (!xdmf_topology)
+             .child("Grid").child("Topology");
+  pugi::xml_node xdmf_topology_data = xdmf_topology.child("DataItem");
+
+  if (!xdmf_topology or !xdmf_topology_data)
   {
     dolfin_error("XDMFxml.cpp",
                  "read mesh from XDMF/H5 files",
@@ -78,7 +80,7 @@ std::string XDMFxml::meshname() const
   }
 
   const std::string
-    topological_data_format(xdmf_topology.attribute("Format").value());
+    topological_data_format(xdmf_topology_data.attribute("Format").value());
   if (topological_data_format != "HDF")
   {
     dolfin_error("XDMFxml.cpp",
@@ -86,35 +88,43 @@ std::string XDMFxml::meshname() const
                  "XML parsing error. Wrong dataset format (not HDF5)");
   }
 
-  const std::string topo_ref(xdmf_topology.first_child().value());
-  std::vector<std::string> topo_bits;
-  boost::split(topo_bits, topo_ref, boost::is_any_of(":/"));
+  // Usually, the DOLFIN CellType is just the lower case of the VTK name
+  // FIXME: this will fail for 1D and quadratic topology
+  std::string cell_type(xdmf_topology.attribute("TopologyType").value());
+  boost::to_lower(cell_type);
 
-  // Should have 5 elements "filename.h5", "", "Mesh", "meshname", "topology"
-  dolfin_assert(topo_bits.size() == 5);
-  dolfin_assert(topo_bits[2] == "Mesh");
-  dolfin_assert(topo_bits[4] == "topology");
+  const std::string topo_ref(xdmf_topology_data.first_child().value());
+  std::vector<std::string> topo_vec;
+  boost::split(topo_vec, topo_ref, boost::is_any_of(":"));
+  dolfin_assert(topo_vec.size() == 2);
 
+  // Add cell type to topology data
+  topo_vec.push_back(cell_type);
+
+  return topo_vec;
+}
+//-----------------------------------------------------------------------------
+std::vector<std::string> XDMFxml::geometry_name() const
+{
   // Geometry - check format and get dataset name
-  pugi::xml_node xdmf_geometry =
+  pugi::xml_node xdmf_geometry_data =
     xml_doc.child("Xdmf").child("Domain").child("Grid").child("Geometry").child("DataItem");
-  dolfin_assert(xdmf_geometry);
+  dolfin_assert(xdmf_geometry_data);
 
-  const std::string geom_fmt(xdmf_geometry.attribute("Format").value());
-  dolfin_assert(geom_fmt == "HDF");
+  const std::string geom_fmt(xdmf_geometry_data.attribute("Format").value());
+  if (geom_fmt != "HDF")
+  {
+    dolfin_error("XDMFxml.cpp",
+                 "read mesh from XDMF/H5 files",
+                 "XML parsing error. Wrong dataset format (not HDF5)");
+  }
 
-  const std::string geom_ref(xdmf_geometry.first_child().value());
-  std::vector<std::string> geom_bits;
-  boost::split(geom_bits, geom_ref, boost::is_any_of(":/"));
+  const std::string geom_ref(xdmf_geometry_data.first_child().value());
 
-  // Should have 5 elements "filename.h5", "", "Mesh", "meshname",
-  // "coordinates"
-  dolfin_assert(geom_bits.size() == 5);
-  dolfin_assert(geom_bits[2] == "Mesh");
-  dolfin_assert(geom_bits[3] == topo_bits[3]);
-  dolfin_assert(geom_bits[4] == "coordinates");
-
-  return geom_bits[3];
+  std::vector<std::string> geom_vec;
+  boost::split(geom_vec, geom_ref, boost::is_any_of(":"));
+  dolfin_assert(geom_vec.size() == 2);
+  return geom_vec;
 }
 //-----------------------------------------------------------------------------
 std::string XDMFxml::dataname() const
@@ -150,10 +160,12 @@ void XDMFxml::data_attribute(std::string name,
   xdmf_values.append_attribute("Name") = name.c_str();
 
   dolfin_assert(value_rank < 3);
+  // 1D Vector should be treated as a Scalar
+  std::size_t apparent_value_rank = (padded_value_size == 1) ? 0 : value_rank;
   static std::vector<std::string> attrib_type
     = {"Scalar", "Vector", "Tensor"};
   xdmf_values.append_attribute("AttributeType")
-    = attrib_type[value_rank].c_str();
+    = attrib_type[apparent_value_rank].c_str();
 
   xdmf_values.append_attribute("Center") = (vertex_data ? "Node" : "Cell");
 
@@ -162,9 +174,8 @@ void XDMFxml::data_attribute(std::string name,
 
   const std::size_t num_total_entities
     = (vertex_data ? num_total_vertices : num_global_cells);
-  std::string
-    s = boost::lexical_cast<std::string>(num_total_entities) + " "
-    + boost::lexical_cast<std::string>(padded_value_size);
+  const std::string s = std::to_string(num_total_entities) + " "
+    + std::to_string(padded_value_size);
   xdmf_data.append_attribute("Dimensions") = s.c_str();
 
   xdmf_data.append_child(pugi::node_pcdata).set_value(dataset_name.c_str());
@@ -234,8 +245,8 @@ pugi::xml_node XDMFxml::init_timeseries(std::string name, double time_step,
    xdmf_timedata = xdmf_timegrid.child("Time").child("DataItem");
    dolfin_assert(xdmf_timedata);
 
-   unsigned int last_count = boost::lexical_cast<unsigned int>
-     (xdmf_timedata.attribute("Dimensions").value());
+   unsigned int last_count
+     = std::stoul(xdmf_timedata.attribute("Dimensions").value());
 
    std::string times_str(xdmf_timedata.first_child().value());
    const std::string timestep_str
@@ -263,7 +274,7 @@ pugi::xml_node XDMFxml::init_timeseries(std::string name, double time_step,
 
    //   /Xdmf/Domain/Grid/Grid - the actual data for this timestep
    xdmf_grid = xdmf_timegrid.append_child("Grid");
-   std::string s = "grid_" + boost::lexical_cast<std::string>(last_count);
+   std::string s = "grid_" + std::to_string(last_count);
    xdmf_grid.append_attribute("Name") = s.c_str();
    xdmf_grid.append_attribute("GridType") = "Uniform";
 
@@ -280,7 +291,7 @@ pugi::xml_node XDMFxml::init_timeseries(std::string name, double time_step,
    return xdmf_grid;
  }
 //-----------------------------------------------------------------------------
-void XDMFxml::mesh_topology(const std::size_t cell_dim,
+void XDMFxml::mesh_topology(const CellType::Type cell_type,
                             const std::size_t cell_order,
                             const std::size_t num_global_cells,
                             const std::string reference)
@@ -295,43 +306,48 @@ void XDMFxml::mesh_topology(const std::size_t cell_dim,
   xdmf_topology.append_attribute("NumberOfElements")
     = (unsigned int) num_global_cells;
 
-  std::size_t nodes_per_element = cell_dim + 1;
+  std::unique_ptr<CellType> celltype(CellType::create(cell_type));
+  std::size_t nodes_per_element = celltype->num_entities(0);
 
   // Cell type
-  if (cell_dim == 0)
+  if (cell_type == CellType::Type::point)
   {
     xdmf_topology.append_attribute("TopologyType") = "PolyVertex";
     xdmf_topology.append_attribute("NodesPerElement") = "1";
   }
-  else if (cell_dim == 1 and cell_order == 1)
+  else if (cell_type == CellType::Type::interval and cell_order == 1)
   {
     xdmf_topology.append_attribute("TopologyType") = "PolyLine";
     xdmf_topology.append_attribute("NodesPerElement") = "2";
   }
-  else if (cell_dim == 1 and cell_order == 2)
+  else if (cell_type == CellType::Type::interval and cell_order == 2)
   {
     xdmf_topology.append_attribute("TopologyType") = "Edge_3";
     nodes_per_element = 3;
   }
-  else if (cell_dim == 2 and cell_order == 1)
+  else if (cell_type == CellType::Type::triangle and cell_order == 1)
     xdmf_topology.append_attribute("TopologyType") = "Triangle";
-  else if (cell_dim == 2 and cell_order == 2)
+  else if (cell_type == CellType::Type::triangle and cell_order == 2)
   {
     xdmf_topology.append_attribute("TopologyType") = "Tri_6";
     nodes_per_element = 6;
   }
-  else if (cell_dim == 3 and cell_order == 1)
+  else if (cell_type == CellType::Type::quadrilateral and cell_order == 1)
+    xdmf_topology.append_attribute("TopologyType") = "Quadrilateral";
+  else if (cell_type == CellType::Type::tetrahedron and cell_order == 1)
     xdmf_topology.append_attribute("TopologyType") = "Tetrahedron";
-  else if (cell_dim == 3 and cell_order == 2)
+  else if (cell_type == CellType::Type::tetrahedron and cell_order == 2)
   {
     xdmf_topology.append_attribute("TopologyType") = "Tet_10";
     nodes_per_element = 10;
   }
+  else if (cell_type == CellType::Type::hexahedron and cell_order == 1)
+    xdmf_topology.append_attribute("TopologyType") = "Hexahedron";
   else
   {
     dolfin_error("XDMFFile.cpp",
                  "output mesh topology",
-                 "Invalid combination of cell dim and order");
+                 "Invalid combination of cell type and order");
   }
 
   if (reference.size() > 0)
@@ -339,9 +355,8 @@ void XDMFxml::mesh_topology(const std::size_t cell_dim,
     // Refer to all cells and dimensions
     xdmf_topology_data = xdmf_topology.append_child("DataItem");
     xdmf_topology_data.append_attribute("Format") = "HDF";
-    const std::string cell_dims
-      = boost::lexical_cast<std::string>(num_global_cells)
-      + " " + boost::lexical_cast<std::string>(nodes_per_element);
+    const std::string cell_dims = std::to_string(num_global_cells)
+      + " " + std::to_string(nodes_per_element);
     xdmf_topology_data.append_attribute("Dimensions") = cell_dims.c_str();
 
     const std::string topology_reference = reference + "/topology";
@@ -377,8 +392,8 @@ void XDMFxml::mesh_geometry(const std::size_t num_total_vertices,
   xdmf_geom_data = xdmf_geometry.append_child("DataItem");
 
   xdmf_geom_data.append_attribute("Format") = "HDF";
-  std::string geom_dim = boost::lexical_cast<std::string>(num_total_vertices)
-    + " " + boost::lexical_cast<std::string>(gdim);
+  std::string geom_dim = std::to_string(num_total_vertices) + " "
+    + std::to_string(gdim);
   xdmf_geom_data.append_attribute("Dimensions") = geom_dim.c_str();
 
   if (gdim == 1)
@@ -401,13 +416,13 @@ void XDMFxml::mesh_geometry(const std::size_t num_total_vertices,
 
     pugi::xml_node xdmf_geom_1 = xdmf_geometry.append_child("DataItem");
     xdmf_geom_1.append_attribute("Format") = "XML";
-    geom_dim = boost::lexical_cast<std::string>(num_total_vertices) + " 1" ;
+    geom_dim = std::to_string(num_total_vertices) + " 1" ;
     xdmf_geom_1.append_attribute("Dimensions") = geom_dim.c_str();
     xdmf_geom_1.append_child(pugi::node_pcdata).set_value(dummy_zeros.c_str());
 
     pugi::xml_node xdmf_geom_2 = xdmf_geometry.append_child("DataItem");
     xdmf_geom_2.append_attribute("Format") = "XML";
-    geom_dim = boost::lexical_cast<std::string>(num_total_vertices) + " 1" ;
+    geom_dim = std::to_string(num_total_vertices) + " 1" ;
     xdmf_geom_2.append_attribute("Dimensions") = geom_dim.c_str();
     xdmf_geom_2.append_child(pugi::node_pcdata).set_value(dummy_zeros.c_str());
   }

@@ -29,7 +29,8 @@ Authors/contributors in alphabetical order:
   Karin Kraft           <kakr@math.chalmers.se>             (-)
   Aleksandra Krusper    <PDE project course 2001/2002>      (-)
   Evan Lezar            <mail@evanlezar.com>                (C)
-  Tianyi Li             <<tianyi.li@polytechnique.edu>>     (C)
+  Tianyi Li             <tianyi.li@polytechnique.edu>       (C)
+  Matthias Liertzer     <matthias.liertzer@tuwien.ac.at>    (C)
   Dag Lindbo            <dag@csc.kth.se>                    (C)
   Glenn Terje Lines     <glennli@simula.no>                 (C)
   Anders Logg           <logg@simula.no>                    (C)
@@ -75,4 +76,4 @@ Authors/contributors in alphabetical order:
 (-) = minor change, copyright form not signed
 
 Missing credits? Tell us and we will fix it.
-Send an email to fenics@fenicsproject.org
+Send an email to fenics-dev@googlegroups.com

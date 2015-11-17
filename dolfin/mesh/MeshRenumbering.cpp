@@ -172,7 +172,7 @@ void MeshRenumbering::compute_renumbering(const Mesh& mesh,
   new_connections.resize(connections_size);
 
   const std::size_t coordinates_size
-    = mesh.geometry().size()*mesh.geometry().dim();
+    = mesh.geometry().num_vertices()*mesh.geometry().dim();
   new_coordinates.resize(coordinates_size);
 
   typedef std::map<std::vector<std::size_t>, std::pair<std::vector<std::size_t>,
@@ -208,7 +208,7 @@ void MeshRenumbering::compute_renumbering(const Mesh& mesh,
   dolfin_assert(!entities_of_color_old.empty());
 
   // Get coordinates
-  const std::vector<double>& coordinates = mesh.geometry().coordinates;
+  const std::vector<double>& coordinates = mesh.geometry().x();
 
   // New vertex indices, -1 if not yet renumbered
   std::vector<int> new_vertex_indices(num_vertices, -1);

@@ -38,6 +38,9 @@
 
 using namespace dolfin;
 
+// FIXME: Remove these defines now that we have dropped support for
+// older version of PETSc
+
 #define MAT_SOLVER_UMFPACK      MATSOLVERUMFPACK
 #define MAT_SOLVER_MUMPS        MATSOLVERMUMPS
 #define MAT_SOLVER_PASTIX       MATSOLVERPASTIX
@@ -161,20 +164,18 @@ void PETScLUSolver::set_operator(std::shared_ptr<const PETScMatrix> A)
 {
   _matA = A;
   dolfin_assert(_matA);
-
   dolfin_assert(_ksp);
-  dolfin_assert(_matA->mat());
+
+  if (!_matA->mat())
+  {
+    dolfin_error("PETScLUSolver.cpp",
+                 "set operator (PETScLUSolver::set_operator)",
+                 "cannot set operator if matrix has not been initialized");
+  }
 
   PetscErrorCode ierr;
-
-  #if PETSC_VERSION_MAJOR == 3 && PETSC_VERSION_MINOR <= 4
-  ierr = KSPSetOperators(_ksp, _matA->mat(), _matA->mat(),
-                         DIFFERENT_NONZERO_PATTERN);
-  if (ierr != 0) petsc_error(ierr, __FILE__, "KSPSetOperators");
-  #else
   ierr = KSPSetOperators(_ksp, _matA->mat(), _matA->mat());
   if (ierr != 0) petsc_error(ierr, __FILE__, "KSPSetOperators");
-  #endif
 }
 //-----------------------------------------------------------------------------
 const GenericLinearOperator& PETScLUSolver::get_operator() const
@@ -236,20 +237,9 @@ std::size_t PETScLUSolver::solve(GenericVector& x, const GenericVector& b,
   // Set number of threads if using PaStiX
   if (strcmp(_solver_package, MATSOLVERPASTIX) == 0)
   {
-    if (parameters["num_threads"].is_set())
-    {
-      // Use number of threads specified for LU solver
-      ierr = PetscOptionsSetValue("-mat_pastix_threadnbr",
-                           parameters["num_threads"].value_str().c_str());
-      if (ierr != 0) petsc_error(ierr, __FILE__, "PetscOptionsSetValue");
-    }
-    else
-    {
-      // Use global number of threads
-      ierr = PetscOptionsSetValue("-mat_pastix_threadnbr",
-                        dolfin::parameters["num_threads"].value_str().c_str());
-      if (ierr != 0) petsc_error(ierr, __FILE__, "PetscOptionsSetValue");
-    }
+    const std::size_t num_threads = parameters["num_threads"].is_set() ?
+      parameters["num_threads"] : dolfin::parameters["num_threads"];
+    PETScOptions::set("-mat_pastix_threadnbr", num_threads);
   }
 
   // Solve linear system
@@ -311,6 +301,33 @@ std::size_t PETScLUSolver::solve_transpose(const PETScMatrix& A,
   std::shared_ptr<const PETScMatrix> _matA(&A, NoDeleter());
   set_operator(_matA);
   return solve_transpose(x, b);
+}
+//-----------------------------------------------------------------------------
+void PETScLUSolver::set_options_prefix(std::string options_prefix)
+{
+  if (_ksp)
+  {
+    dolfin_error("PETScLUSolver.cpp",
+                 "setting PETSc options prefix",
+                 "Cannot set options prefix since PETSc KSP has already been initialized");
+  }
+  else
+    _petsc_options_prefix = options_prefix;
+}
+//-----------------------------------------------------------------------------
+std::string PETScLUSolver::get_options_prefix() const
+{
+  if (_ksp)
+  {
+    const char* prefix = NULL;
+    KSPGetOptionsPrefix(_ksp, &prefix);
+    return std::string(prefix);
+  }
+  else
+  {
+    warning("PETSc KSP object has not been initialised, therefore prefix has not been set");
+    return std::string();
+  }
 }
 //-----------------------------------------------------------------------------
 std::string PETScLUSolver::str(bool verbose) const
@@ -435,9 +452,16 @@ void PETScLUSolver::init_solver(std::string& method)
     if (ierr != 0) petsc_error(ierr, __FILE__, "KSPGetPC");
   }
 
+  // Set options prefix (if any)
+  ierr = KSPSetOptionsPrefix(_ksp, _petsc_options_prefix.c_str());
+  if (ierr != 0) petsc_error(ierr, __FILE__, "KSPSetOptionsPrefix");
+
   // Make solver preconditioner only
   ierr = KSPSetType(_ksp, KSPPREONLY);
   if (ierr != 0) petsc_error(ierr, __FILE__, "KSPSetType");
+
+  // Set from PETSc options
+  KSPSetFromOptions(_ksp);
 }
 //-----------------------------------------------------------------------------
 void PETScLUSolver::configure_ksp(const MatSolverPackage solver_package)

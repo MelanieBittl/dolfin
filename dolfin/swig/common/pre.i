@@ -38,7 +38,7 @@
 // and object itself we only care about the former.
 %define %petsc4py_objreft(Type)
 %typemap(check,noblock=1) Type *OUTPUT {
-  if ($1 == PETSC_NULL)
+  if ($1 == NULL)
     %argument_nullref("$type", $symname, $argnum);
  }
 %apply Type *OUTPUT { Type & }
@@ -50,6 +50,7 @@
 %petsc4py_objreft(Vec)
 %petsc4py_objreft(KSP)
 %petsc4py_objreft(SNES)
+%petsc4py_objreft(Tao)
 #endif
 
 #ifdef HAS_SLEPC4PY
@@ -107,3 +108,8 @@
 %rename(_root_node) dolfin::Hierarchical::root_node_shared_ptr;
 %ignore dolfin::Hierarchical::leaf_node;
 %rename(_leaf_node) dolfin::Hierarchical::leaf_node_shared_ptr;
+
+//-----------------------------------------------------------------------------
+// Ignores for Variable
+//-----------------------------------------------------------------------------
+%ignore dolfin::Variable::operator=;

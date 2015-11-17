@@ -23,6 +23,7 @@
 
 #include <string>
 #include <vector>
+#include <dolfin/mesh/CellType.h>
 
 #include "pugixml.hpp"
 
@@ -45,8 +46,13 @@ namespace dolfin
     /// Read from a file
     void read();
 
-    /// Get the (unique) Mesh name from the current XML
-    std::string meshname() const;
+    /// Get the (unique) Mesh topology name, split into three parts (file name, dataset name, CellType)
+    /// from the current XML
+    std::vector<std::string> topology_name() const;
+
+    /// Get the (unique) Mesh geometry name, split into two parts (file name, dataset name)
+    /// from the current XML
+    std::vector<std::string> geometry_name() const;
 
     /// Get the (unique) dataset name for a MeshFunction in current XML
     std::string dataname() const;
@@ -70,7 +76,7 @@ namespace dolfin
                                    std::size_t counter);
 
     /// Attach topology to the current grid node
-    void mesh_topology(const std::size_t cell_dim,
+    void mesh_topology(const CellType::Type cell_type,
                        const std::size_t cell_order,
                        const std::size_t num_global_cells,
                        const std::string reference);

@@ -88,11 +88,11 @@ def J(V, u, F):
 
 @fixture
 def lb(V):
-    return Function(interpolate(Constant(0.), V))
+    return interpolate(Constant(0.), V)
 
 @fixture
 def ub(V):
-    return Function(interpolate(Constant(100.), V))
+    return interpolate(Constant(100.), V)
 
 @fixture
 def newton_solver_parameters():
@@ -117,21 +117,23 @@ def snes_solver_parameters_bounds():
             "sign": "default",
             "report": True}}
 
-@skip_if_not_petsc_snes
+@skip_if_not_PETSc
 def test_snes_solver(F, bcs, u, snes_solver_parameters_sign, parameter_degree,\
                      parameter_backend):
     u.interpolate(Constant(-1000.0))
     solve(F == 0, u, bcs, solver_parameters=snes_solver_parameters_sign)
     assert u.vector().min() >= 0
 
-@skip_if_not_petsc_snes
+
+@skip_if_not_PETSc
 def test_newton_solver(F, u, bcs, newton_solver_parameters, parameter_degree,\
                        parameter_backend):
     u.interpolate(Constant(-1000.0))
     solve(F == 0, u, bcs, solver_parameters=newton_solver_parameters)
     assert u.vector().min() < 0
 
-@skip_if_not_petsc_snes
+
+@skip_if_not_PETSc
 def test_snes_solver_bound_functions(F, u, bcs, J, \
                                      snes_solver_parameters_bounds,
                                      lb, ub, parameter_degree, \
@@ -143,7 +145,8 @@ def test_snes_solver_bound_functions(F, u, bcs, J, \
     solver.solve(lb, ub)
     assert u.vector().min() >= 0
 
-@skip_if_not_petsc_snes
+
+@skip_if_not_PETSc
 def test_snes_solver_bound_vectors(F, u, bcs, J, snes_solver_parameters_bounds,
                                     lb, ub, parameter_degree, \
                                    parameter_backend):

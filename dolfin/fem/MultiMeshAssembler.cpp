@@ -16,7 +16,7 @@
 // along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
 //
 // First added:  2013-09-12
-// Last changed: 2015-01-08
+// Last changed: 2015-05-13
 
 #include <dolfin/function/MultiMeshFunctionSpace.h>
 
@@ -99,7 +99,7 @@ void MultiMeshAssembler::_assemble_uncut_cells(GenericTensor& A,
 
   // Initialize variables that will be reused throughout assembly
   ufc::cell ufc_cell;
-  std::vector<double> vertex_coordinates;
+  std::vector<double> coordinate_dofs;
 
   // Iterate over parts
   for (std::size_t part = 0; part < a.num_parts(); part++)
@@ -133,8 +133,8 @@ void MultiMeshAssembler::_assemble_uncut_cells(GenericTensor& A,
 
       // Update to current cell
       cell.get_cell_data(ufc_cell);
-      cell.get_vertex_coordinates(vertex_coordinates);
-      ufc_part.update(cell, vertex_coordinates, ufc_cell);
+      cell.get_coordinate_dofs(coordinate_dofs);
+      ufc_part.update(cell, coordinate_dofs, ufc_cell);
 
       // Get local-to-global dof maps for cell
       for (std::size_t i = 0; i < form_rank; ++i)
@@ -146,7 +146,7 @@ void MultiMeshAssembler::_assemble_uncut_cells(GenericTensor& A,
       // Tabulate cell tensor
       cell_integral->tabulate_tensor(ufc_part.A.data(),
                                      ufc_part.w(),
-                                     vertex_coordinates.data(),
+                                     coordinate_dofs.data(),
                                      ufc_cell.orientation);
 
       // Add entries to global tensor
@@ -174,7 +174,7 @@ void MultiMeshAssembler::_assemble_cut_cells(GenericTensor& A,
 
   // Initialize variables that will be reused throughout assembly
   ufc::cell ufc_cell;
-  std::vector<double> vertex_coordinates;
+  std::vector<double> coordinate_dofs;
 
   // Iterate over parts
   for (std::size_t part = 0; part < a.num_parts(); part++)
@@ -191,8 +191,8 @@ void MultiMeshAssembler::_assemble_cut_cells(GenericTensor& A,
     const Mesh& mesh_part = a_part.mesh();
 
     // FIXME: We assume that the custom integral associated with cut
-    // cells is number 0.
-    // FIXME: This needs to be sorted out in the UFL-UFC
+    // FIXME: cells is number 0. This needs to be sorted out in the
+    // FIXME: UFL-UFC interface.
 
     // Get integral for cut cells
     ufc::custom_integral* custom_integral = 0;
@@ -218,8 +218,8 @@ void MultiMeshAssembler::_assemble_cut_cells(GenericTensor& A,
 
       // Update to current cell
       cell.get_cell_data(ufc_cell);
-      cell.get_vertex_coordinates(vertex_coordinates);
-      ufc_part.update(cell, vertex_coordinates, ufc_cell);
+      cell.get_coordinate_dofs(coordinate_dofs);
+      ufc_part.update(cell, coordinate_dofs, ufc_cell);
 
       // Get local-to-global dof maps for cell
       for (std::size_t i = 0; i < form_rank; ++i)
@@ -265,7 +265,7 @@ void MultiMeshAssembler::_assemble_cut_cells(GenericTensor& A,
       // Tabulate cell tensor
       custom_integral->tabulate_tensor(ufc_part.A.data(),
                                        ufc_part.w(),
-                                       vertex_coordinates.data(),
+                                       coordinate_dofs.data(),
                                        num_quadrature_points,
                                        pr.first.data(),
                                        pr.second.data(),
@@ -297,8 +297,8 @@ void MultiMeshAssembler::_assemble_interface(GenericTensor& A,
 
   // Initialize variables that will be reused throughout assembly
   ufc::cell ufc_cell[2];
-  std::vector<double> vertex_coordinates[2];
-  std::vector<double> macro_vertex_coordinates;
+  std::vector<double> coordinate_dofs[2];
+  std::vector<double> macro_coordinate_dofs;
 
   // Vector to hold dofs for cells, and a vector holding pointers to same
   std::vector<ArrayView<const dolfin::la_index>> macro_dof_ptrs(form_rank);
@@ -314,7 +314,7 @@ void MultiMeshAssembler::_assemble_interface(GenericTensor& A,
     UFC ufc_part(a_part);
 
     // FIXME: We assume that the custom integral associated with the
-    // interface is number 1.
+    // FIXME: interface is number 1.
     // FIXME: This needs to be sorted out in the UFL-UFC interfaces
     // FIXME: We also assume that we have exactly two cells, while the UFC
     // FIXME: interface (but not FFC...) allows an arbitrary number of cells.
@@ -382,21 +382,21 @@ void MultiMeshAssembler::_assemble_interface(GenericTensor& A,
           // Update to current pair of cells
           cell_0.get_cell_data(ufc_cell[0], 0);
           cell_1.get_cell_data(ufc_cell[1], 0);
-          cell_0.get_vertex_coordinates(vertex_coordinates[0]);
-          cell_1.get_vertex_coordinates(vertex_coordinates[1]);
-          ufc_part.update(cell_0, vertex_coordinates[0], ufc_cell[0],
-                          cell_1, vertex_coordinates[1], ufc_cell[1]);
+          cell_0.get_coordinate_dofs(coordinate_dofs[0]);
+          cell_1.get_coordinate_dofs(coordinate_dofs[1]);
+          ufc_part.update(cell_0, coordinate_dofs[0], ufc_cell[0],
+                          cell_1, coordinate_dofs[1], ufc_cell[1]);
 
           // Collect vertex coordinates
-          macro_vertex_coordinates.resize(vertex_coordinates[0].size() +
-                                          vertex_coordinates[0].size());
-          std::copy(vertex_coordinates[0].begin(),
-                    vertex_coordinates[0].end(),
-                    macro_vertex_coordinates.begin());
-          std::copy(vertex_coordinates[1].begin(),
-                    vertex_coordinates[1].end(),
-                    macro_vertex_coordinates.begin()
-                    + vertex_coordinates[0].size());
+          macro_coordinate_dofs.resize(coordinate_dofs[0].size() +
+                                          coordinate_dofs[0].size());
+          std::copy(coordinate_dofs[0].begin(),
+                    coordinate_dofs[0].end(),
+                    macro_coordinate_dofs.begin());
+          std::copy(coordinate_dofs[1].begin(),
+                    coordinate_dofs[1].end(),
+                    macro_coordinate_dofs.begin()
+                    + coordinate_dofs[0].size());
 
           // Tabulate dofs for each dimension on macro element
           for (std::size_t i = 0; i < form_rank; i++)
@@ -418,6 +418,11 @@ void MultiMeshAssembler::_assemble_interface(GenericTensor& A,
                       macro_dofs[i].begin());
             std::copy(dofs_1.begin(), dofs_1.end(),
                       macro_dofs[i].begin() + dofs_0.size());
+
+            // Update array view
+            macro_dof_ptrs[i]
+              = ArrayView<const dolfin::la_index>(macro_dofs[i].size(),
+                                                  macro_dofs[i].data());
           }
 
           // Get facet normals
@@ -435,7 +440,7 @@ void MultiMeshAssembler::_assemble_interface(GenericTensor& A,
           // Tabulate interface tensor on macro element
           custom_integral->tabulate_tensor(ufc_part.macro_A.data(),
                                            ufc_part.macro_w(),
-                                           macro_vertex_coordinates.data(),
+                                           macro_coordinate_dofs.data(),
                                            num_quadrature_points,
                                            qr.first.data(),
                                            qr.second.data(),
@@ -472,8 +477,8 @@ void MultiMeshAssembler::_assemble_overlap(GenericTensor& A,
 
   // Initialize variables that will be reused throughout assembly
   ufc::cell ufc_cell[2];
-  std::vector<double> vertex_coordinates[2];
-  std::vector<double> macro_vertex_coordinates;
+  std::vector<double> coordinate_dofs[2];
+  std::vector<double> macro_coordinate_dofs;
 
   // Vector to hold dofs for cells, and a vector holding pointers to same
   std::vector<ArrayView<const dolfin::la_index>> macro_dof_ptrs(form_rank);
@@ -488,13 +493,10 @@ void MultiMeshAssembler::_assemble_overlap(GenericTensor& A,
     // Create data structure for local assembly data
     UFC ufc_part(a_part);
 
-    // FIXME: We assume that the custom integral associated with the
-    // overlap is number 2.
+    // FIXME: We assume that the custom integral associated with the overlap is number 2.
     // FIXME: This needs to be sorted out in the UFL-UFC interfaces
-    // FIXME: We also assume that we have exactly two cells, while the
-    // UFC
-    // FIXME: interface (but not FFC...) allows an arbitrary number of
-    // cells.
+    // FIXME: We also assume that we have exactly two cells, while the UFC
+    // FIXME: interface (but not FFC...) allows an arbitrary number of cells.
 
     // Get integral
     ufc::custom_integral* custom_integral = 0;
@@ -529,8 +531,7 @@ void MultiMeshAssembler::_assemble_overlap(GenericTensor& A,
           // Get cutting part and cutting cell
           const std::size_t cutting_part = jt->first;
           const std::size_t cutting_cell_index = jt->second;
-          const Cell cutting_cell(*multimesh->part(cutting_part),
-                                  cutting_cell_index);
+          const Cell cutting_cell(*multimesh->part(cutting_part), cutting_cell_index);
 
           // Get quadrature rule for interface part defined by
           // intersection of the cut and cutting cells
@@ -555,21 +556,21 @@ void MultiMeshAssembler::_assemble_overlap(GenericTensor& A,
           // Update to current pair of cells
           cell_0.get_cell_data(ufc_cell[0], 0);
           cell_1.get_cell_data(ufc_cell[1], 0);
-          cell_0.get_vertex_coordinates(vertex_coordinates[0]);
-          cell_1.get_vertex_coordinates(vertex_coordinates[1]);
-          ufc_part.update(cell_0, vertex_coordinates[0], ufc_cell[0],
-                          cell_1, vertex_coordinates[1], ufc_cell[1]);
+          cell_0.get_coordinate_dofs(coordinate_dofs[0]);
+          cell_1.get_coordinate_dofs(coordinate_dofs[1]);
+          ufc_part.update(cell_0, coordinate_dofs[0], ufc_cell[0],
+                          cell_1, coordinate_dofs[1], ufc_cell[1]);
+
 
           // Collect vertex coordinates
-          macro_vertex_coordinates.resize(vertex_coordinates[0].size() +
-                                          vertex_coordinates[0].size());
-          std::copy(vertex_coordinates[0].begin(),
-                    vertex_coordinates[0].end(),
-                    macro_vertex_coordinates.begin());
-          std::copy(vertex_coordinates[1].begin(),
-                    vertex_coordinates[1].end(),
-                    macro_vertex_coordinates.begin()
-                    + vertex_coordinates[0].size());
+          macro_coordinate_dofs.resize(coordinate_dofs[0].size() +
+                                          coordinate_dofs[0].size());
+          std::copy(coordinate_dofs[0].begin(),
+                    coordinate_dofs[0].end(),
+                    macro_coordinate_dofs.begin());
+          std::copy(coordinate_dofs[1].begin(),
+                    coordinate_dofs[1].end(),
+                    macro_coordinate_dofs.begin() + coordinate_dofs[0].size());
 
           // Tabulate dofs for each dimension on macro element
           for (std::size_t i = 0; i < form_rank; i++)
@@ -579,8 +580,7 @@ void MultiMeshAssembler::_assemble_overlap(GenericTensor& A,
             const auto dofs_0 = dofmap_0->cell_dofs(cell_0.index());
 
             // Get dofs for cutting mesh
-            const auto dofmap_1
-              = a.function_space(i)->dofmap()->part(cutting_part);
+            const auto dofmap_1 = a.function_space(i)->dofmap()->part(cutting_part);
             const auto dofs_1 = dofmap_1->cell_dofs(cell_1.index());
 
             // Create space in macro dof vector
@@ -591,6 +591,11 @@ void MultiMeshAssembler::_assemble_overlap(GenericTensor& A,
                       macro_dofs[i].begin());
             std::copy(dofs_1.begin(), dofs_1.end(),
                       macro_dofs[i].begin() + dofs_0.size());
+
+            // Update array view
+            macro_dof_ptrs[i]
+              = ArrayView<const dolfin::la_index>(macro_dofs[i].size(),
+                                                  macro_dofs[i].data());
           }
 
           // FIXME: Cell orientation not supported
@@ -599,7 +604,7 @@ void MultiMeshAssembler::_assemble_overlap(GenericTensor& A,
           // Tabulate overlap tensor on macro element
           custom_integral->tabulate_tensor(ufc_part.macro_A.data(),
                                            ufc_part.macro_w(),
-                                           macro_vertex_coordinates.data(),
+                                           macro_coordinate_dofs.data(),
                                            num_quadrature_points,
                                            qr.first.data(),
                                            qr.second.data(),
@@ -607,8 +612,6 @@ void MultiMeshAssembler::_assemble_overlap(GenericTensor& A,
                                            cell_orientation);
 
           // Add entries to global tensor
-          for (std::size_t i = 0; i < form_rank; i++)
-            macro_dof_ptrs[i].set(macro_dofs[i]);
           A.add(ufc_part.macro_A.data(), macro_dof_ptrs);
         }
       }
@@ -660,10 +663,10 @@ void MultiMeshAssembler::_init_global_tensor(GenericTensor& A,
   // Initialize tensor
   A.init(*tensor_layout);
 
-  // Insert zeros on the diagonal as diagonal entries may be
-  // prematurely optimised away by the linear algebra backend when
-  // calling GenericMatrix::apply, e.g. PETSc does this then errors
-  // when matrices have no diagonal entry inserted.
+  // Insert zeros on the diagonal as diagonal entries may be prematurely
+  // optimised away by the linear algebra backend when calling
+  // GenericMatrix::apply, e.g. PETSc does this then errors when matrices
+  // have no diagonal entry inserted.
   if (A.rank() == 2)
   {
     // Down cast to GenericMatrix

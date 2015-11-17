@@ -91,32 +91,22 @@ std::shared_ptr<const std::map<std::size_t, std::size_t>>
   return local_edge_to_new_vertex;
 }
 //-----------------------------------------------------------------------------
-void ParallelRefinement::mark(const MeshEntity& cell)
+void ParallelRefinement::mark(const MeshEntity& entity)
 {
-  // Special case for Edge, otherwise will mark all edge-edge connections
-  if (cell.dim() == 1)
-    mark(cell.index());
-  else
-    for (EdgeIterator edge(cell); !edge.end(); ++edge)
-      mark(edge->index());
+  for (EdgeIterator edge(entity); !edge.end(); ++edge)
+    mark(edge->index());
 }
 //-----------------------------------------------------------------------------
 void ParallelRefinement::mark(const MeshFunction<bool>& refinement_marker)
 {
   const std::size_t entity_dim = refinement_marker.dim();
-
   for (MeshEntityIterator entity(_mesh, entity_dim); !entity.end();
        ++entity)
   {
     if (refinement_marker[*entity])
     {
-      // Special case for EdgeFunction because EdgeIterator(Edge) will get all
-      // connected edge-edge entities otherwise
-      if (entity_dim == 1)
-        mark(entity->index());
-      else
-        for (EdgeIterator edge(*entity); !edge.end(); ++edge)
-          mark(edge->index());
+      for (EdgeIterator edge(*entity); !edge.end(); ++edge)
+        mark(edge->index());
     }
   }
 }
@@ -298,6 +288,8 @@ void ParallelRefinement::partition(Mesh& new_mesh, bool redistribute) const
   mesh_data.tdim = _mesh.topology().dim();
   const std::size_t gdim = _mesh.geometry().dim();
   mesh_data.gdim = gdim;
+
+  mesh_data.cell_type = _mesh.type().cell_type();
   mesh_data.num_vertices_per_cell = mesh_data.tdim + 1;
 
   // Copy data to LocalMeshData structures
@@ -363,7 +355,7 @@ void ParallelRefinement::new_cell(const std::size_t i0, const std::size_t i1,
   new_cell_topology.push_back(i2);
 }
 //-----------------------------------------------------------------------------
-void ParallelRefinement::new_cell(const std::vector<std::size_t>& idx)
+void ParallelRefinement::new_cells(const std::vector<std::size_t>& idx)
 {
   new_cell_topology.insert(new_cell_topology.end(), idx.begin(), idx.end());
 }

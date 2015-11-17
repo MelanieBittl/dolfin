@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 2.8)
 project(DOLFIN)
 set(DOLFIN_VERSION_RELEASE 0)
 set(DOLFIN_VERSION_MAJOR "1")
-set(DOLFIN_VERSION_MINOR "6")
+set(DOLFIN_VERSION_MINOR "7")
 set(DOLFIN_VERSION_MICRO "0")
 set(DOLFIN_VERSION "${DOLFIN_VERSION_MAJOR}.${DOLFIN_VERSION_MINOR}.${DOLFIN_VERSION_MICRO}")
 if (NOT DOLFIN_VERSION_RELEASE)
@@ -74,7 +74,6 @@ option(CMAKE_SKIP_RPATH "Do not add runtime paths when using shared libraries." 
 option(CMAKE_INSTALL_RPATH_USE_LINK_PATH "Add paths to linker search and installed rpath." ON)
 option(CMAKE_USE_RELATIVE_PATHS "Use relative paths in makefiles and projects." OFF)
 option(DOLFIN_AUTO_DETECT_MPI "Detect MPI automatically - turn this off to use the MPI compiler wrappers directly via setting CXX, CXX, FC." ON)
-option(DOLFIN_DEBUG_UBLAS "Use extra uBLAS debugging." OFF)
 option(DOLFIN_ENABLE_CODE_COVERAGE "Enable code coverage." OFF)
 option(DOLFIN_WITH_LIBRARY_VERSION "Build with library version information." ON)
 option(DOLFIN_ENABLE_UNIT_TESTS "Enable unit tests." ON)
@@ -83,10 +82,7 @@ option(DOLFIN_ENABLE_BENCHMARKS "Enable benchmark programs." OFF)
 option(DOLFIN_ENABLE_DOCS "Enable generation of documentation." ON)
 option(DOLFIN_SKIP_BUILD_TESTS "Skip build tests." OFF)
 option(DOLFIN_DEPRECATION_ERROR "Turn deprecation warnings into errors." OFF)
-#------------------------------------------------------------------------------
-# This should be removed when petsc version > 3.4 is out
-
-option(DOLFIN_ENABLE_TAO "Enable TAO solver." OFF)
+option(DOLFIN_IGNORE_PETSC4PY_VERSION "Ignore version of PETSc4py." OFF)
 
 #------------------------------------------------------------------------------
 # This should be removed when Clang support OpenMP is ready
@@ -118,7 +114,6 @@ list(APPEND OPTIONAL_PACKAGES "Python")
 list(APPEND OPTIONAL_PACKAGES "Sphinx")
 list(APPEND OPTIONAL_PACKAGES "HDF5")
 list(APPEND OPTIONAL_PACKAGES "VTK")
-list(APPEND OPTIONAL_PACKAGES "QT")
 
 # Add options
 foreach (OPTIONAL_PACKAGE ${OPTIONAL_PACKAGES})
@@ -212,11 +207,6 @@ endif()
 set(CMAKE_CXX_FLAGS_DEVELOPER "${DOLFIN_CXX_DEVELOPER_FLAGS}" CACHE STRING
   "Flags used by the compiler during development." FORCE)
 
-# Do not debug uBLAS unless requested
-if (NOT DOLFIN_DEBUG_UBLAS)
-  list(APPEND DOLFIN_CXX_DEFINITIONS "-DBOOST_UBLAS_NDEBUG")
-endif()
-
 # FIXME: Do we want to add -DDEBUG to RelWithDebInfo?
 
 # Set debug definitions
@@ -293,7 +283,8 @@ if (DOLFIN_ENABLE_MPI)
       set(MPI_FOUND TRUE)
     endif()
   else()
-    # Assume user has set MPI compiler wrappers (via CXX, etc or CMAKE_CXX_COMPILER, etc)
+    # Assume user has set MPI compiler wrappers (via CXX, etc or
+    # CMAKE_CXX_COMPILER, etc)
     set(MPI_FOUND TRUE)
     set(MPI_CXX_FOUND TRUE)
     set(MPI_C_FOUND TRUE)
@@ -320,7 +311,8 @@ if (BOOST_ROOT)
   set(Boost_NO_SYSTEM_PATHS on)
 endif()
 
-# Prevent FindBoost.cmake from looking for system  Boost{foo}.cmake files
+# Prevent FindBoost.cmake from looking for system Boost{foo}.cmake
+# files
 set(Boost_NO_BOOST_CMAKE true)
 
 set(Boost_USE_MULTITHREADED $ENV{BOOST_USE_MULTITHREADED})
@@ -333,11 +325,15 @@ set(DOLFIN_BOOST_COMPONENTS filesystem program_options system thread iostreams
 find_package(Boost 1.53 COMPONENTS ${DOLFIN_BOOST_COMPONENTS} REQUIRED)
 
 # Check for required package UFC
+<<<<<<< HEAD
 set(UFC_DIR /home/user/mbittl/scratch/local/share/ufc)
 find_package(UFC 1.6.0 QUIET HINTS ${UFC_DIR})
+=======
+find_package(UFC 1.7.0 QUIET HINTS ${UFC_DIR})
+>>>>>>> 4e37e07f09abdbb7345207c94039fcd2688e707e
 if (NOT UFC_FOUND)
   message(FATAL_ERROR "Could not find a configuration file for package UFC that is "
-    "compatible with requested version 1.6.0.\n"
+    "compatible with requested version 1.7.0.\n"
     "Set UFC_DIR to the directory containing a CMake configuration file for UFC.")
 else()
   message(STATUS "UFC version: ${UFC_VERSION_STRING}")
@@ -349,8 +345,9 @@ find_package(Eigen3 3.2.0 REQUIRED)
 #------------------------------------------------------------------------------
 # Run tests to find optional packages
 
-# Note: Check for Python interpreter even when Python is disabled because it
-#       is used to get the installation path for dolfin_utils
+# Note: Check for Python interpreter even when Python is disabled
+#       because it is used to get the installation path for
+#       dolfin_utils
 # FIXME PY3: Select python 3 based on config flag?
 find_package(PythonInterp 2)
 if (DOLFIN_ENABLE_PYTHON)
@@ -417,44 +414,33 @@ endif()
 
 # Check for PETSc, SLEPc and petsc4py, slepc4py
 if (DOLFIN_ENABLE_PETSC)
-  find_package(PETSc 3.3)
+  find_package(PETSc 3.6)
 
   if (PETSC_FOUND AND PYTHON_FOUND AND DOLFIN_ENABLE_PETSC4PY)
     find_package(PETSc4py)
     if (PETSC4PY_FOUND)
       if (NOT ("${PETSC4PY_VERSION_MAJOR}" EQUAL "${PETSC_VERSION_MAJOR}"
-               AND "${PETSC4PY_VERSION_MINOR}" EQUAL "${PETSC_VERSION_MINOR}"))
-        message(WARNING "PETSc version ${PETSC_VERSION} and petsc4py version ${PETSC4PY_VERSION} do not match.  Disabling petsc4py support")
+               AND "${PETSC4PY_VERSION_MINOR}" EQUAL "${PETSC_VERSION_MINOR}") AND NOT DOLFIN_IGNORE_PETSC4PY_VERSION)
+        message(WARNING "PETSc version ${PETSC_VERSION} and petsc4py version ${PETSC4PY_VERSION} do not match. Disabling PETSc4py.")
         set(PETSC4PY_FOUND FALSE)
       endif()
     endif()
   endif()
 
   if (PETSC_FOUND AND DOLFIN_ENABLE_SLEPC)
-    find_package(SLEPc 3.3)
+    find_package(SLEPc 3.6)
 
     if (SLEPC_FOUND AND PYTHON_FOUND AND DOLFIN_ENABLE_SLEPC4PY)
-      find_package(SLEPc4py 3.5.1)
+      find_package(SLEPc4py)
       if (SLEPC4PY_FOUND)
         if (NOT ("${SLEPC4PY_VERSION_MAJOR}" EQUAL "${SLEPC_VERSION_MAJOR}"
-                 AND "${SLEPC4PY_VERSION_MINOR}" EQUAL "${SLEPC_VERSION_MINOR}"))
+              AND "${SLEPC4PY_VERSION_MINOR}" EQUAL "${SLEPC_VERSION_MINOR}"))
           message(WARNING "SLEPc version ${SLEPC_VERSION} and slepc4py version ${SLEPC4PY_VERSION} do not match.  Disabling slepc4py support")
           set(SLEPC4PY_FOUND FALSE)
         endif()
       endif()
     endif()
   endif()
-
-  # Enable PETSc SNES for PETSc verion > 3.3
-  if (PETSC_VERSION VERSION_GREATER 3.3.100)
-    set(PETSC_ENABLE_SNES TRUE)
-  endif()
-
-  # Enable TAO from PETSc for PETSc verion > 3.4
-  if ((PETSC_VERSION VERSION_GREATER 3.4.100) OR (DOLFIN_ENABLE_TAO))
-    set(PETSC_ENABLE_TAO TRUE)
-  endif()
-
 endif()
 
 # Check for ParMETIS and SCOTCH
@@ -509,8 +495,9 @@ endif()
 # Check for Trilinos and the requires Trilinos packages
 if (DOLFIN_ENABLE_TRILINOS)
   message(STATUS "Checking for Trilinos")
-  find_package(Trilinos PATHS ${TRILINOS_DIR} ${Trilinos_DIR} $ENV{TRILINOS_DIR} QUIET)
-  set(DOLFIN_TRILINOS_PACKAGES "Epetra;Zoltan;ML;Ifpack;Amesos;Belos")
+  find_package(Trilinos PATHS ${TRILINOS_DIR} ${Trilinos_DIR}
+    $ENV{TRILINOS_DIR} QUIET)
+  set(DOLFIN_TRILINOS_PACKAGES "Tpetra;Zoltan;MueLu;Amesos2;Ifpack2;Belos")
 
   if ("${Trilinos_VERSION}" VERSION_LESS "11.0.0")
     set(Trilinos_FOUND FALSE)
@@ -604,11 +591,6 @@ if (DOLFIN_ENABLE_DOCS AND PYTHON_FOUND)
   find_package(Sphinx 1.1.0)
 endif()
 
-# Check for Qt4
-if (DOLFIN_ENABLE_QT)
-  find_package(Qt4)
-endif()
-
 # Check for VTK
 if (DOLFIN_ENABLE_VTK)
   find_package(VTK HINTS ${VTK_DIR} $ENV{VTK_DIR} NO_MODULE)
@@ -693,7 +675,8 @@ endif()
 if (PYTHONINTERP_FOUND)
 
   if (NOT DEFINED DOLFIN_INSTALL_PYTHON_MODULE_DIR)
-    # Get path for platform-dependent Python modules (since we install a binary libary)
+    # Get path for platform-dependent Python modules (since we install
+    # a binary libary)
 
     # Python command string to discover module install location
     if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -875,7 +858,8 @@ install(FILES ${CMAKE_BINARY_DIR}/dolfin-get-demos
 
 #------------------------------------------------------------------------------
 # Generate form files for tests, bench, demos and dolfin if not exists
-# FIXME: Generate files in Build directory instead, at least for bench, demo and tests
+# FIXME: Generate files in Build directory instead, at least for
+# bench, demo and tests
 
 set(COPY_DEMO_TEST_DEMO_DATA FALSE)
 if (NOT EXISTS ${DOLFIN_SOURCE_DIR}/demo/documented/poisson/cpp/Poisson.h)
@@ -902,7 +886,8 @@ if (NOT EXISTS ${DOLFIN_SOURCE_DIR}/demo/documented/poisson/cpp/Poisson.h)
 endif()
 
 #------------------------------------------------------------------------------
-# Generate CMakeLists.txt files for tests, bench and demos if not exists
+# Generate CMakeLists.txt files for tests, bench and demos if not
+# exists
 # FIXME: Generate files in Build directory instead?
 # NOTE: We need to call this script after generate-formfiles
 if (NOT EXISTS ${DOLFIN_SOURCE_DIR}/demo/documented/poisson/cpp/CMakeLists.txt)
@@ -1072,45 +1057,33 @@ if (DOLFIN_ENABLE_TESTING)
     DEPENDS copy_data_test_demo demo
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test/regression")
 
-  # Add target "run_systemtests" for running system tests
-  add_custom_target(run_systemtests
-    COMMAND echo "System tests are removed.")
-
-  # TODO: Make buildbot run the dependencies here separately?
   # Add target "run_unittests" for running unit tests
   add_custom_target(run_unittests
-    DEPENDS run_unittests_2)
-
-  # ... attempt at controlling dependency execution order ...
-  add_custom_target(run_unittests_2
-    DEPENDS run_unittests_py_mpi run_unittests_1)
-  add_custom_target(run_unittests_1
-    DEPENDS run_unittests_cpp run_unittests_0)
-  add_custom_target(run_unittests_0
-    DEPENDS run_unittests_py)
+    DEPENDS run_unittests_cpp run_unittests_py run_unittests_py_mpi)
 
   # TODO: Use google test for C++ unit tests?
   # Add target "run_unittests_cpp" for running only C++ unit tests
   add_custom_target(run_unittests_cpp
-    COMMAND ${PYTHON_EXECUTABLE} "-B" "-m" "pytest" "-vs" "-k" "cpp"
+    COMMAND ${PYTHON_EXECUTABLE} "-B" "-u" "-m" "pytest" "-vs" "-k" "cpp"
     DEPENDS copy_data_test_demo tests
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test/unit")
 
   # Add target "run_unittests_py" for running Python unit tests
   add_custom_target(run_unittests_py
-    COMMAND ${PYTHON_EXECUTABLE} "-B" "-m" "pytest" "-vs"
+    COMMAND ${PYTHON_EXECUTABLE} "-B" "-u" "-m" "pytest" "-vs"
     DEPENDS copy_data_test_demo
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test/unit/python")
 
   # Add target "run_unittests_py_mpi" for running Python unit tests with mpi
   add_custom_target(run_unittests_py_mpi
-    COMMAND ${MPIEXEC} "-np" "3" ${PYTHON_EXECUTABLE} "-B" "-m" "pytest" "-vs"
+    COMMAND ${MPIEXEC} "-np" "3" "./mpipipe.sh" ${PYTHON_EXECUTABLE} "-B" "-u" "-m" "pytest" "-vs"
     DEPENDS copy_data_test_demo
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test/unit/python")
 
-  # Add target "run_quicktest" for running only Python unit tests not marked as 'slow'
+  # Add target "run_quicktest" for running only Python unit tests not
+  # marked as 'slow'
   add_custom_target(run_quicktest
-    COMMAND ${PYTHON_EXECUTABLE} "-B" "-m" "pytest" "-vs" "-k" "'not" "slow'"
+    COMMAND ${PYTHON_EXECUTABLE} "-B" "-u" "-m" "pytest" "-vs" "-k" "'not" "slow'"
     DEPENDS copy_data_test_demo
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test/unit/python")
 

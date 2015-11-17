@@ -19,9 +19,10 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
 
-from dolfin import *
+from __future__ import print_function
 import pytest
-from dolfin_utils.test import skip_if_not_PETSc
+from dolfin import *
+from dolfin_utils.test import skip_if_not_PETSc, skip_in_parallel
 
 @skip_if_not_PETSc
 def test_krylov_samg_solver_elasticity():
@@ -42,8 +43,8 @@ def test_krylov_samg_solver_elasticity():
         V.sub(1).dofmap().set(nullspace_basis[1], 1.0);
 
         # Build rotational null space basis
-        V.sub(0).dofmap().set_x(nullspace_basis[2], -1.0, 1, V.mesh());
-        V.sub(1).dofmap().set_x(nullspace_basis[2], 1.0, 0, V.mesh());
+        V.sub(0).set_x(nullspace_basis[2], -1.0, 1);
+        V.sub(1).set_x(nullspace_basis[2], 1.0, 0);
 
         for x in nullspace_basis:
             x.apply("insert")
@@ -63,7 +64,7 @@ def test_krylov_samg_solver_elasticity():
 
         # Define problem
         mesh = UnitSquareMesh(N, N)
-        V = VectorFunctionSpace(mesh, 'CG', 1)
+        V = VectorFunctionSpace(mesh, 'Lagrange', 1)
         bc = DirichletBC(V, Constant((0.0, 0.0)),
                          lambda x, on_boundary: on_boundary)
         u = TrialFunction(V)
@@ -98,15 +99,8 @@ def test_krylov_samg_solver_elasticity():
     PETScOptions.set("mg_levels_ksp_type", "chebyshev")
     PETScOptions.set("mg_levels_pc_type", "jacobi")
 
-    # Improve estimate of eigenvalues for Chebyshev smoothing (PETSc
-    # version<3.6 option)
-    PETScOptions.set("mg_levels_est_ksp_type", "cg")
-    PETScOptions.set("mg_levels_est_ksp_max_it", 50)
-    PETScOptions.set("gamg_est_ksp_type", "cg")
-    PETScOptions.set("gamg_est_ksp_max_it", 50)
-
-    # Improve estimate of eigenvalues for Chebyshev smoothing (more
-    # recent PETSc option)
+    # Improve estimate of eigenvalues for Chebyshev smoothing
+    PETScOptions.set("mg_levels_esteig_ksp_type", "cg");
     PETScOptions.set("mg_levels_ksp_chebyshev_esteig_steps", 50)
 
     # Build list of smoothed aggregation preconditioners
@@ -117,9 +111,79 @@ def test_krylov_samg_solver_elasticity():
     # Test iteration count with increasing mesh size for each
     # preconditioner
     for method in methods:
-        for N in [4, 8, 16, 32, 64]:
+        for N in [8, 16, 32, 64]:
             print("Testing method '{}' with {} x {} mesh".format(method, N, N))
             niter = amg_solve(N, method)
-            assert niter < 12
+            assert niter < 18
 
     parameters["linear_algebra_backend"] = previous_backend
+
+
+@skip_if_not_PETSc
+def test_krylov_reuse_pc():
+    "Test preconditioner re-use with PETScKrylovSolver"
+
+    # Define problem
+    mesh = UnitSquareMesh(8, 8)
+    V = FunctionSpace(mesh, 'Lagrange', 1)
+    bc = DirichletBC(V, Constant(0.0), lambda x, on_boundary: on_boundary)
+    u = TrialFunction(V)
+    v = TestFunction(V)
+
+    # Forms
+    a, L = inner(grad(u), grad(v))*dx, dot(Constant(1.0), v)*dx
+
+    A, P = PETScMatrix(), PETScMatrix()
+    b = PETScVector()
+
+    # Assemble linear algebra objects
+    assemble(a, tensor=A)
+    assemble(a, tensor=P)
+    assemble(L, tensor=b)
+
+    # Apply boundary conditions
+    bc.apply(A)
+    bc.apply(P)
+    bc.apply(b)
+
+    # Create Krysolv solver and set operators
+    solver = PETScKrylovSolver("gmres", "bjacobi")
+    solver.set_operators(A, P)
+
+    # Solve
+    x = PETScVector()
+    num_iter_ref = solver.solve(x, b)
+
+    # Change preconditioner matrix (bad matrix) and solve (PC will be
+    # updated)
+    a_p = u*v*dx
+    assemble(a_p, tensor=P)
+    bc.apply(P)
+    x = PETScVector()
+    num_iter_mod = solver.solve(x, b)
+    assert num_iter_mod > num_iter_ref
+
+    # Change preconditioner matrix (good matrix) and solve (PC will be
+    # updated)
+    a_p = a
+    assemble(a_p, tensor=P)
+    bc.apply(P)
+    x = PETScVector()
+    num_iter = solver.solve(x, b)
+    assert num_iter == num_iter_ref
+
+    # Change preconditioner matrix (bad matrix) and solve (PC will not
+    # be updated)
+    solver.set_reuse_preconditioner(True)
+    a_p = u*v*dx
+    assemble(a_p, tensor=P)
+    bc.apply(P)
+    x = PETScVector()
+    num_iter = solver.solve(x, b)
+    assert num_iter == num_iter_ref
+
+    # Update preconditioner (bad PC, will increase iteration count)
+    solver.set_reuse_preconditioner(False)
+    x = PETScVector()
+    num_iter = solver.solve(x, b)
+    assert num_iter == num_iter_mod

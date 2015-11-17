@@ -36,7 +36,7 @@
 //-----------------------------------------------------------------------------
 %extend dolfin::Mesh {
   PyObject* _coordinates() {
-    return %make_numpy_array(2, double)(self->num_vertices(),
+    return %make_numpy_array(2, double)(self->geometry().num_points(),
 					self->geometry().dim(),
 					self->coordinates().data(), true);
   }
@@ -44,7 +44,7 @@
   PyObject* _cells() {
     // FIXME: Works only for Mesh with Intervals, Triangles and Tetrahedrons
     return %make_numpy_array(2, uint)(self->num_cells(),
-                                      self->topology().dim() + 1,
+                                      self->type().num_entities(0),
 				      self->cells().data(), false);
   }
 
@@ -306,3 +306,17 @@ FORWARD_DECLARE_MESHFUNCTIONS(std::size_t, Sizet)
 // Add director classes
 //-----------------------------------------------------------------------------
 %feature("director") dolfin::SubDomain;
+
+//-----------------------------------------------------------------------------
+// Ignore all of MeshPartitioning except
+// void build_distributed_mesh(Mesh&);
+//-----------------------------------------------------------------------------
+%ignore dolfin::MeshPartitioning::build_distributed_mesh(Mesh&, const std::vector<std::size_t>&);
+%ignore dolfin::MeshPartitioning::build_distributed_mesh(Mesh&, const LocalMeshData&);
+%ignore dolfin::MeshPartitioning::build_distributed_value_collection;
+
+//-----------------------------------------------------------------------------
+// Ignores for MultiMesh
+//-----------------------------------------------------------------------------
+%ignore dolfin::plot(const MultiMesh& multimesh);
+%ignore dolfin::plot(std::shared_ptr<const MultiMesh> multimesh);

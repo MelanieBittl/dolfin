@@ -312,17 +312,17 @@ def test_subdomain_assembly_form_1():
     mesh1 = subdomains.mesh()
     mesh2 = boundaries.mesh()
     assert mesh1.id() == mesh2.id()
-    assert mesh1.ufl_domain().label() == mesh2.ufl_domain().label()
+    assert mesh1.ufl_domain().ufl_id() == mesh2.ufl_domain().ufl_id()
 
-    dxs = dx[subdomains]
-    dss = ds[boundaries]
-    assert dxs.domain() == None
-    assert dss.domain() == None
+    dxs = dx(subdomain_data=subdomains)
+    dss = ds(subdomain_data=boundaries)
+    assert dxs.ufl_domain() == None
+    assert dss.ufl_domain() == None
     assert dxs.subdomain_data() == subdomains
     assert dss.subdomain_data() == boundaries
 
     M = f*f*dxs(0) + g*f*dxs(1) + f*f*dss(1)
-    assert M.domains() == (mesh.ufl_domain(),)
+    assert M.ufl_domains() == (mesh.ufl_domain(),)
     sd = M.subdomain_data()[mesh.ufl_domain()]
     assert sd["cell"] == subdomains
     assert sd["exterior_facet"] == boundaries
@@ -383,17 +383,17 @@ def test_subdomain_assembly_form_1_multithreaded():
     mesh1 = subdomains.mesh()
     mesh2 = boundaries.mesh()
     assert mesh1.id() == mesh2.id()
-    assert mesh1.ufl_domain().label() == mesh2.ufl_domain().label()
+    assert mesh1.ufl_domain().ufl_id() == mesh2.ufl_domain().ufl_id()
 
-    dxs = dx[subdomains]
-    dss = ds[boundaries]
-    assert dxs.domain() == None
-    assert dss.domain() == None
+    dxs = dx(subdomain_data=subdomains)
+    dss = ds(subdomain_data=boundaries)
+    assert dxs.ufl_domain() == None
+    assert dss.ufl_domain() == None
     assert dxs.subdomain_data() == subdomains
     assert dss.subdomain_data() == boundaries
 
     M = f*f*dxs(0) + g*f*dxs(1) + f*f*dss(1)
-    assert M.domains() == (mesh.ufl_domain(),)
+    assert M.ufl_domains() == (mesh.ufl_domain(),)
     sd = M.subdomain_data()[mesh.ufl_domain()]
     assert sd["cell"] == subdomains
     assert sd["exterior_facet"] == boundaries
@@ -519,10 +519,14 @@ def test_nonsquare_assembly():
     """Test assembly of a rectangular matrix"""
 
     mesh = UnitSquareMesh(16, 16)
-    V = VectorFunctionSpace(mesh, "CG", 2)
-    Q = FunctionSpace(mesh, "CG", 1)
 
+    V = VectorElement("Lagrange", mesh.ufl_cell(), 2)
+    Q = FiniteElement("Lagrange", mesh.ufl_cell(), 1)
     W = V*Q
+    V = FunctionSpace(mesh, V)
+    Q = FunctionSpace(mesh, Q)
+    W = FunctionSpace(mesh, W)
+
     (v, q) = TestFunctions(W)
     (u, p) = TrialFunctions(W)
     a = div(v)*p*dx
@@ -542,9 +546,9 @@ def test_nonsquare_assembly_multithreaded():
 
     mesh = UnitSquareMesh(16, 16)
 
-    V = VectorFunctionSpace(mesh, "CG", 2)
-    Q = FunctionSpace(mesh, "CG", 1)
-    W = V*Q
+    V = VectorElement("Lagrange", mesh.ufl_cell(), 2)
+    Q = FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+    W = FunctionSpace(mesh, V*Q)
 
     (v, q) = TestFunctions(W)
     (u, p) = TrialFunctions(W)
@@ -572,31 +576,36 @@ def test_reference_assembly(filedir):
     # Assemble stiffness and mass matrices
     V = FunctionSpace(mesh, "Lagrange", 1)
     u, v = TrialFunction(V), TestFunction(V)
-    A, M = uBLASDenseMatrix(), uBLASDenseMatrix()
+    A, M = EigenMatrix(), EigenMatrix()
     assemble(dot(grad(v), grad(u))*dx, tensor=A)
     assemble(v*u*dx, tensor=M)
 
-    # Create reference matrices and set entries
-    A0, M0 = uBLASDenseMatrix(4, 4), uBLASDenseMatrix(4, 4)
-    pos = numpy.array([0, 1, 2, 3], dtype=la_index_dtype())
-    A0.set(numpy.array([[1.0/2.0, -1.0/6.0, -1.0/6.0, -1.0/6.0],
-                        [-1.0/6.0, 1.0/6.0, 0.0, 0.0],
-                        [-1.0/6.0, 0.0, 1.0/6.0, 0.0],
-                        [-1.0/6.0, 0.0, 0.0, 1.0/6.0]]), pos, pos)
-    M0.set(numpy.array([[1.0/60.0, 1.0/120.0, 1.0/120.0, 1.0/120.0],
-                        [1.0/120.0, 1.0/60.0, 1.0/120.0, 1.0/120.0],
-                        [1.0/120.0, 1.0/120.0, 1.0/60.0, 1.0/120.0],
-                        [1.0/120.0, 1.0/120.0, 1.0/120.0, 1.0/60.0]]), pos, pos)
-    A0.apply("insert")
-    M0.apply("insert")
+    # Run test (requires SciPy)
+    try:
+        import scipy
+        A = A.sparray().todense()
+        M = M.sparray().todense()
 
-    C = A - A0
-    assert round(C.norm("frobenius") - 0.0, 7) == 0
-    D = M - M0
-    assert round(D.norm("frobenius") - 0.0, 7) == 0
+        # Create reference matrices and set entries
+        A0 = numpy.array([[1.0/2.0, -1.0/6.0, -1.0/6.0, -1.0/6.0],
+                          [-1.0/6.0, 1.0/6.0, 0.0, 0.0],
+                          [-1.0/6.0, 0.0, 1.0/6.0, 0.0],
+                          [-1.0/6.0, 0.0, 0.0, 1.0/6.0]])
+        M0 = numpy.array([[1.0/60.0, 1.0/120.0, 1.0/120.0, 1.0/120.0],
+                          [1.0/120.0, 1.0/60.0, 1.0/120.0, 1.0/120.0],
+                          [1.0/120.0, 1.0/120.0, 1.0/60.0, 1.0/120.0],
+                          [1.0/120.0, 1.0/120.0, 1.0/120.0, 1.0/60.0]])
 
-    parameters["reorder_dofs_serial"] = reorder_dofs
+        C = A - A0
+        assert round(numpy.linalg.norm(C, 'fro') - 0.0, 7) == 0
+        D = M - M0
+        assert round(numpy.linalg.norm(D, 'fro') - 0.0, 7) == 0
 
+        parameters["reorder_dofs_serial"] = reorder_dofs
+
+    except:
+        print("Cannot run this test without SciPy")
+        parameters["reorder_dofs_serial"] = reorder_dofs
 
 def test_ways_to_pass_mesh_to_assembler():
     mesh = UnitSquareMesh(16, 16)
@@ -619,7 +628,7 @@ def test_ways_to_pass_mesh_to_assembler():
     e = Expression("x[0]") # nothing
     e2 = Expression("x[0]", cell=mesh.ufl_cell()) # cell
     e3 = Expression("x[0]", element=V.ufl_element()) # ufl element
-    e4 = Expression("x[0]", domain=mesh) # ufl.Domain (this one holds mesh reference)
+    e4 = Expression("x[0]", domain=mesh) # mesh
 
     # Provide mesh in measure:
     dx2 = Measure("dx", domain=mesh)

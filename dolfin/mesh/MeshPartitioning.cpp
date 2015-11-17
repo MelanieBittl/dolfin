@@ -108,6 +108,8 @@ void MeshPartitioning::build_distributed_mesh(Mesh& mesh,
 void MeshPartitioning::build_distributed_mesh(Mesh& mesh,
                                               const LocalMeshData& local_data)
 {
+  Timer timer("Build distributed mesh from local mesh data");
+
   // Compute cell partitioning or use partitioning provided in local_data
   std::vector<std::size_t> cell_partition;
   std::map<std::size_t, dolfin::Set<unsigned int>> ghost_procs;
@@ -187,7 +189,7 @@ void MeshPartitioning::build(Mesh& mesh, const LocalMeshData& mesh_data,
      const std::map<std::size_t, dolfin::Set<unsigned int>>& ghost_procs)
 {
   // Distribute cells
-  Timer timer("PARALLEL 2: Distribute mesh (cells and vertices)");
+  Timer timer("Distribute mesh (cells and vertices)");
 
   // Structure to hold received data about local mesh
   LocalMeshData new_mesh_data(mesh.mpi_comm());
@@ -198,7 +200,7 @@ void MeshPartitioning::build(Mesh& mesh, const LocalMeshData& mesh_data,
   new_mesh_data.num_global_cells = mesh_data.num_global_cells;
   new_mesh_data.num_vertices_per_cell
     = mesh_data.num_vertices_per_cell;
-
+  new_mesh_data.cell_type = mesh_data.cell_type;
   new_mesh_data.num_global_vertices = mesh_data.num_global_vertices;
 
   // Keep tabs on ghost cell ownership
@@ -291,7 +293,7 @@ void MeshPartitioning::reorder_cells_gps(
   std::map<unsigned int, std::set<unsigned int>>& shared_cells,
   LocalMeshData& new_mesh_data)
 {
-  Timer t("Reorder cells GPS");
+  Timer timer("Reorder cells using GPS ordering");
 
   // Make dual graph from vertex indices, using GraphBuilder
   // FIXME: this should be reused later to add the facet-cell topology
@@ -364,7 +366,7 @@ void MeshPartitioning::reorder_vertices_gps(MPI_Comm mpi_comm,
      std::map<std::size_t, std::size_t>& vertex_global_to_local,
      LocalMeshData& new_mesh_data)
 {
-  Timer t("Reorder vertices GPS");
+  Timer timer("Reorder vertices using GPS ordering");
 
   const unsigned int num_cell_vertices
     = new_mesh_data.num_vertices_per_cell;
@@ -834,7 +836,7 @@ void MeshPartitioning::distribute_vertices(
   // then distributed so that each process learns where it needs to
   // send its vertices.
 
-  Timer t("Distribute vertices");
+  Timer timer("Distribute vertices");
 
   std::vector<std::size_t>& vertex_indices
     = new_mesh_data.vertex_indices;
@@ -1000,7 +1002,7 @@ void MeshPartitioning::build_mesh(Mesh& mesh,
   const std::map<std::size_t, std::size_t>& vertex_global_to_local,
   const LocalMeshData& new_mesh_data)
 {
-  Timer timer("PARALLEL 3: Build mesh (from local mesh data)");
+  Timer timer("Build local part of distributed mesh (from local mesh data)");
 
   const std::vector<std::size_t>& global_cell_indices
     = new_mesh_data.global_cell_indices;
@@ -1017,7 +1019,7 @@ void MeshPartitioning::build_mesh(Mesh& mesh,
   // Open mesh for editing
   mesh.clear();
   MeshEditor editor;
-  editor.open(mesh, tdim, gdim);
+  editor.open(mesh, new_mesh_data.cell_type, tdim, gdim);
 
   // Add vertices
   editor.init_vertices_global(vertex_coordinates.size(),
@@ -1034,7 +1036,7 @@ void MeshPartitioning::build_mesh(Mesh& mesh,
   // Add cells
   editor.init_cells_global(cell_global_vertices.size(),
                            new_mesh_data.num_global_cells);
-  const std::size_t num_cell_vertices = tdim + 1;
+  const std::size_t num_cell_vertices = new_mesh_data.num_vertices_per_cell;
   std::vector<std::size_t> cell(num_cell_vertices);
   for (std::size_t i = 0; i < cell_global_vertices.size(); ++i)
   {

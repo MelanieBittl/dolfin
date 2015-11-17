@@ -73,10 +73,24 @@ std::size_t EigenMatrix::size(std::size_t dim) const
 //---------------------------------------------------------------------------
 double EigenMatrix::norm(std::string norm_type) const
 {
-  if (norm_type == "l2")
+  if (norm_type == "l1")
+  {
+    double _norm = 0.0;
+    for (std::size_t i = 0; i < size(1); ++i)
+      _norm = std::max(_norm, _matA.col(i).cwiseAbs().sum());
+    return _norm;
+  }
+  else if (norm_type == "l2")
     return _matA.squaredNorm();
   else if (norm_type == "frobenius")
     return _matA.norm();
+  else if (norm_type == "linf")
+  {
+    double _norm = 0.0;
+    for (std::size_t i = 0; i < size(0); ++i)
+      _norm = std::max(_norm, _matA.row(i).cwiseAbs().sum());
+    return _norm;
+  }
   else
   {
     dolfin_error("EigenMatrix.h",
@@ -150,7 +164,7 @@ void EigenMatrix::get(double* block, std::size_t m,
                       const dolfin::la_index* rows,
                       std::size_t n, const dolfin::la_index* cols) const
 {
-  for(std::size_t i = 0; i < m; ++i)
+  for (std::size_t i = 0; i < m; ++i)
   {
     const dolfin::la_index row = rows[i];
     for(std::size_t j = 0; j < n; ++j)
@@ -161,14 +175,14 @@ void EigenMatrix::get(double* block, std::size_t m,
 void EigenMatrix::zero()
 {
   // Set to zero whilst keeping the non-zero pattern
-  for(dolfin::la_index i = 0; i < _matA.outerSize(); ++i)
+  for (dolfin::la_index i = 0; i < _matA.outerSize(); ++i)
     for (eigen_matrix_type::InnerIterator it(_matA, i); it; ++it)
       it.valueRef() = 0.0;
 }
 //----------------------------------------------------------------------------
 void EigenMatrix::zero(std::size_t m, const dolfin::la_index* rows)
 {
-  for(const dolfin::la_index* i_ptr = rows; i_ptr != rows + m; ++i_ptr)
+  for (const dolfin::la_index* i_ptr = rows; i_ptr != rows + m; ++i_ptr)
     for (eigen_matrix_type::InnerIterator it(_matA, *i_ptr); it; ++it)
       it.valueRef() = 0.0;
 }
@@ -186,6 +200,7 @@ void EigenMatrix::ident(std::size_t m, const dolfin::la_index* rows)
 
     // Loop over non-zeros in a row
     for (eigen_matrix_type::InnerIterator it(_matA, *i_ptr); it; ++it)
+    {
       // Check if we are on the diagonal
       if (diagonal_unset && it.index() == *i_ptr)
       {
@@ -194,6 +209,7 @@ void EigenMatrix::ident(std::size_t m, const dolfin::la_index* rows)
       }
       else
         it.valueRef() = 0.0;
+    }
 
     // Check that diagonal has been set
     if (diagonal_unset)
@@ -229,6 +245,20 @@ void EigenMatrix::mult(const GenericVector& x, GenericVector& y) const
   }
 
   yy.vec() = _matA*xx.vec();
+}
+//-----------------------------------------------------------------------------
+void EigenMatrix::get_diagonal(GenericVector& x) const
+{
+  if (size(1) != size(0) || size(0) != x.size())
+  {
+    dolfin_error("EigenMatrix.h",
+                 "Get diagonal of a Eigen Matrix",
+                 "Matrix and vector dimensions don't match");
+  }
+
+  Eigen::VectorXd& xx = x.down_cast<EigenVector>().vec();
+  for (std::size_t i = 0; i != x.size(); ++i)
+    xx[i] = _matA.coeff(i, i);
 }
 //-----------------------------------------------------------------------------
 void EigenMatrix::set_diagonal(const GenericVector& x)
@@ -290,14 +320,29 @@ const GenericMatrix& EigenMatrix::operator= (const GenericMatrix& A)
   return *this;
 }
 //----------------------------------------------------------------------------
-const
-EigenMatrix& EigenMatrix::operator= (const EigenMatrix& A)
+const EigenMatrix& EigenMatrix::operator= (const EigenMatrix& A)
 {
   // Check for self-assignment
   if (this != &A)
     _matA = A.mat();
 
   return *this;
+}
+//----------------------------------------------------------------------------
+std::tuple<const int*, const int*, const double*, std::size_t>
+EigenMatrix:: data() const
+{
+  // Check that matrix has been compressed
+  if (!_matA.isCompressed())
+  {
+    dolfin_error("EigenMatrix.h",
+                 "get raw data from EigenMatrix",
+                 "Matrix has not been compressed. Try calling EigenMatrix::compress() first");
+  }
+
+  // Return pointers to matrix data
+  return std::make_tuple(_matA.outerIndexPtr(), _matA.innerIndexPtr(),
+                         _matA.valuePtr(), _matA.nonZeros());
 }
 //----------------------------------------------------------------------------
 std::string EigenMatrix::str(bool verbose) const
@@ -314,7 +359,8 @@ std::string EigenMatrix::str(bool verbose) const
         std::stringstream entry;
         entry << std::setiosflags(std::ios::scientific);
         entry << std::setprecision(16);
-        entry << " (" << it2.row() << ", " << it2.col() << ", " << it2.value() << ")";
+        entry << " (" << it2.row() << ", " << it2.col() << ", " << it2.value()
+              << ")";
         s << entry.str();
       }
       s << " |" << std::endl;
@@ -326,8 +372,7 @@ std::string EigenMatrix::str(bool verbose) const
   return s.str();
 }
 //----------------------------------------------------------------------------
-void
-EigenMatrix::init(const TensorLayout& tensor_layout)
+void EigenMatrix::init(const TensorLayout& tensor_layout)
 {
   resize(tensor_layout.size(0), tensor_layout.size(1));
 
@@ -368,11 +413,11 @@ std::size_t EigenMatrix::nnz() const
 //---------------------------------------------------------------------------
 void EigenMatrix::apply(std::string mode)
 {
-  // Nothing to do
+  _matA.makeCompressed();
 }
 //---------------------------------------------------------------------------
 void EigenMatrix::axpy(double a, const GenericMatrix& A,
-                              bool same_nonzero_pattern)
+                       bool same_nonzero_pattern)
 {
   // Check for same size
   if (size(0) != A.size(0) or size(1) != A.size(1))
